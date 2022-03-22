@@ -4,6 +4,8 @@ require './vendor/autoload.php';
 
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 
+$queueName = 'proxmox_nodes_repair';
+
 $connection = new AMQPStreamConnection(
     'localhost',
     5672,
@@ -13,7 +15,13 @@ $connection = new AMQPStreamConnection(
 
 $channel = $connection->channel();
 
-$channel->queue_declare('hello', false, false, false, false);
+$channel->queue_declare(
+    $queueName,
+    false,
+    true, // durable
+    false,
+    false
+);
 
 echo 'Waiting for message ...' . PHP_EOL;
 
@@ -25,10 +33,20 @@ $callback = function ($msg) {
     echo $msg->body . PHP_EOL;
     echo 'Done' . PHP_EOL;
 
-    $msg->ack;
+    $msg->ack();
 };
 
-$channel->basic_consume('proxmox_node_repair_data_collection', '', false, false, false, false, $callback);
+$channel->basic_qos(null, 1, null);
+
+$channel->basic_consume(
+    $queueName,
+    '',
+    false,
+    false, // true means no ACK
+    false,
+    false,
+    $callback
+);
 
 while ($channel->is_open()) {
     $channel->wait();
